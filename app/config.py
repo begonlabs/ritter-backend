@@ -8,10 +8,12 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     DATABASE_URL: str = ""
+    SUPABASE_PROJECT_ID: str = ""
+    SUPABASE_ANON_KEY: str = ""
     
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    ALGORITHM: str = "HS256"
+    ALGORITHM: str = "RS256"
     
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
     

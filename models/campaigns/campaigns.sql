@@ -1,7 +1,7 @@
 -- =====================================
--- CAMPAIGNS MODULE - EMAIL CAMPAIGNS & TEMPLATES
+-- CAMPAIGNS MODULE - SUPABASE ADAPTED VERSION
 -- =====================================
--- Tables: email_templates, template_variables, campaigns, campaign_recipients
+-- Adaptado para usar auth.users de Supabase
 
 -- Enable UUID extension (if not already enabled)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -48,9 +48,9 @@ CREATE TABLE email_templates (
   description TEXT,
   category VARCHAR(100),
   subject VARCHAR(500) NOT NULL,
-  body_html TEXT NOT NULL, -- HTML template content
-  body_text TEXT, -- Plain text version (optional)
-  variables JSONB DEFAULT '[]', -- Available template variables
+  body_html TEXT NOT NULL,
+  body_text TEXT,
+  variables JSONB DEFAULT '[]',
   preview_text VARCHAR(255),
   status template_status DEFAULT 'active',
   
@@ -60,8 +60,8 @@ CREATE TABLE email_templates (
   open_rate DECIMAL(5,2) DEFAULT 0.00,
   click_rate DECIMAL(5,2) DEFAULT 0.00,
   
-  -- System Fields
-  created_by UUID NOT NULL,
+  -- System Fields - ADAPTADO PARA SUPABASE
+  created_by UUID NOT NULL REFERENCES auth.users(id),
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now(),
   last_used_at TIMESTAMP
@@ -72,7 +72,7 @@ CREATE TABLE template_variables (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   template_id UUID NOT NULL,
   variable_name VARCHAR(100) NOT NULL,
-  variable_type VARCHAR(50) NOT NULL, -- text, number, date, etc.
+  variable_type VARCHAR(50) NOT NULL,
   default_value TEXT,
   is_required BOOLEAN DEFAULT false,
   description TEXT
@@ -102,8 +102,8 @@ CREATE TABLE campaigns (
   completed_at TIMESTAMP,
   
   -- Target Audience
-  target_leads JSONB DEFAULT '[]', -- Array of lead IDs
-  filters JSONB DEFAULT '{}', -- Search filters used
+  target_leads JSONB DEFAULT '[]',
+  filters JSONB DEFAULT '{}',
   total_recipients INTEGER DEFAULT 0,
   
   -- Campaign Results
@@ -121,8 +121,8 @@ CREATE TABLE campaigns (
   unsubscribe_rate DECIMAL(5,2) DEFAULT 0.00,
   conversion_rate DECIMAL(5,2) DEFAULT 0.00,
   
-  -- System Fields
-  created_by UUID NOT NULL,
+  -- System Fields - ADAPTADO PARA SUPABASE
+  created_by UUID NOT NULL REFERENCES auth.users(id),
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now(),
   
@@ -198,21 +198,16 @@ CREATE INDEX idx_campaign_recipients_email_address ON campaign_recipients(email_
 CREATE INDEX idx_campaign_recipients_status ON campaign_recipients(status);
 CREATE INDEX idx_campaign_recipients_sent_at ON campaign_recipients(sent_at);
 CREATE UNIQUE INDEX idx_campaign_recipients_campaign_lead ON campaign_recipients(campaign_id, lead_id);
-CREATE INDEX idx_campaign_recipients_campaign_email ON campaign_recipients(campaign_id, email_address);
 
 -- =====================================
--- FOREIGN KEY CONSTRAINTS
+-- FOREIGN KEY CONSTRAINTS - ADAPTADO
 -- =====================================
-
--- Email templates foreign keys
-ALTER TABLE email_templates ADD CONSTRAINT fk_email_templates_created_by FOREIGN KEY (created_by) REFERENCES users(id);
 
 -- Template variables foreign keys
 ALTER TABLE template_variables ADD CONSTRAINT fk_template_variables_template_id FOREIGN KEY (template_id) REFERENCES email_templates(id) ON DELETE CASCADE;
 
 -- Campaigns foreign keys
 ALTER TABLE campaigns ADD CONSTRAINT fk_campaigns_template_id FOREIGN KEY (template_id) REFERENCES email_templates(id);
-ALTER TABLE campaigns ADD CONSTRAINT fk_campaigns_created_by FOREIGN KEY (created_by) REFERENCES users(id);
 
 -- Campaign recipients foreign keys
 ALTER TABLE campaign_recipients ADD CONSTRAINT fk_campaign_recipients_campaign_id FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE;
@@ -231,7 +226,7 @@ CREATE TRIGGER update_campaigns_updated_at
   BEFORE UPDATE ON campaigns 
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Function to update campaign statistics
+-- Function to update campaign statistics - SIN CAMBIOS
 CREATE OR REPLACE FUNCTION update_campaign_statistics()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -306,266 +301,22 @@ CREATE TRIGGER update_template_usage_trigger
   FOR EACH ROW EXECUTE FUNCTION update_template_usage();
 
 -- =====================================
--- FUNCTIONS FOR CAMPAIGNS MODULE
+-- RLS POLICIES - NUEVO PARA SUPABASE
 -- =====================================
 
--- Function to get campaign performance summary
-CREATE OR REPLACE FUNCTION get_campaign_performance(p_campaign_id UUID)
-RETURNS TABLE (
-  campaign_id UUID,
-  campaign_name VARCHAR(255),
-  total_recipients INTEGER,
-  emails_sent INTEGER,
-  emails_delivered INTEGER,
-  emails_opened INTEGER,
-  emails_clicked INTEGER,
-  emails_bounced INTEGER,
-  emails_unsubscribed INTEGER,
-  open_rate DECIMAL(5,2),
-  click_rate DECIMAL(5,2),
-  bounce_rate DECIMAL(5,2),
-  unsubscribe_rate DECIMAL(5,2),
-  status campaign_status,
-  created_at TIMESTAMP,
-  completed_at TIMESTAMP
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    c.id, c.name, c.total_recipients, c.emails_sent, c.emails_delivered,
-    c.emails_opened, c.emails_clicked, c.emails_bounced, c.emails_unsubscribed,
-    c.open_rate, c.click_rate, c.bounce_rate, c.unsubscribe_rate,
-    c.status, c.created_at, c.completed_at
-  FROM campaigns c
-  WHERE c.id = p_campaign_id;
-END;
-$$ language 'plpgsql';
+-- Habilitar RLS
+ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE template_variables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_recipients ENABLE ROW LEVEL SECURITY;
 
--- Function to get template performance
-CREATE OR REPLACE FUNCTION get_template_performance(p_template_id UUID)
-RETURNS TABLE (
-  template_id UUID,
-  template_name VARCHAR(255),
-  usage_count INTEGER,
-  total_campaigns BIGINT,
-  total_emails_sent BIGINT,
-  avg_open_rate DECIMAL(5,2),
-  avg_click_rate DECIMAL(5,2),
-  last_used_at TIMESTAMP
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    t.id,
-    t.name,
-    t.usage_count,
-    COUNT(c.id) as total_campaigns,
-    COALESCE(SUM(c.emails_sent), 0) as total_emails_sent,
-    COALESCE(ROUND(AVG(c.open_rate), 2), 0.00) as avg_open_rate,
-    COALESCE(ROUND(AVG(c.click_rate), 2), 0.00) as avg_click_rate,
-    t.last_used_at
-  FROM email_templates t
-  LEFT JOIN campaigns c ON t.id = c.template_id
-  WHERE t.id = p_template_id
-  GROUP BY t.id, t.name, t.usage_count, t.last_used_at;
-END;
-$$ language 'plpgsql';
+-- Políticas básicas de RLS
+CREATE POLICY "Users can view their own templates" ON email_templates FOR SELECT USING (auth.uid() = created_by);
+CREATE POLICY "Users can create templates" ON email_templates FOR INSERT WITH CHECK (auth.uid() = created_by);
+CREATE POLICY "Users can update their own templates" ON email_templates FOR UPDATE USING (auth.uid() = created_by);
 
--- Function to get campaign recipients status breakdown
-CREATE OR REPLACE FUNCTION get_campaign_recipients_breakdown(p_campaign_id UUID)
-RETURNS TABLE (
-  status email_status,
-  count BIGINT,
-  percentage DECIMAL(5,2)
-) AS $$
-DECLARE
-  total_recipients INTEGER;
-BEGIN
-  -- Get total recipients
-  SELECT COUNT(*) INTO total_recipients 
-  FROM campaign_recipients 
-  WHERE campaign_id = p_campaign_id;
-  
-  RETURN QUERY
-  SELECT 
-    cr.status,
-    COUNT(*) as count,
-    CASE WHEN total_recipients > 0 THEN ROUND((COUNT(*)::DECIMAL / total_recipients) * 100, 2) ELSE 0.00 END as percentage
-  FROM campaign_recipients cr
-  WHERE cr.campaign_id = p_campaign_id
-  GROUP BY cr.status
-  ORDER BY count DESC;
-END;
-$$ language 'plpgsql';
+CREATE POLICY "Users can view their own campaigns" ON campaigns FOR SELECT USING (auth.uid() = created_by);
+CREATE POLICY "Users can create campaigns" ON campaigns FOR INSERT WITH CHECK (auth.uid() = created_by);
+CREATE POLICY "Users can update their own campaigns" ON campaigns FOR UPDATE USING (auth.uid() = created_by);
 
--- Function to add leads to campaign
-CREATE OR REPLACE FUNCTION add_leads_to_campaign(
-  p_campaign_id UUID,
-  p_lead_ids UUID[]
-)
-RETURNS INTEGER AS $$
-DECLARE
-  lead_record RECORD;
-  added_count INTEGER := 0;
-BEGIN
-  -- Loop through lead IDs and add to campaign
-  FOR lead_record IN 
-    SELECT id, email, company_name 
-    FROM leads 
-    WHERE id = ANY(p_lead_ids) 
-      AND email IS NOT NULL 
-      AND verified_email = true
-  LOOP
-    -- Insert recipient record (ignore duplicates)
-    INSERT INTO campaign_recipients (campaign_id, lead_id, email_address, personalization_data)
-    VALUES (
-      p_campaign_id, 
-      lead_record.id, 
-      lead_record.email,
-      json_build_object('company_name', lead_record.company_name)
-    )
-    ON CONFLICT (campaign_id, lead_id) DO NOTHING;
-    
-    -- Count successful insertions
-    IF FOUND THEN
-      added_count := added_count + 1;
-    END IF;
-  END LOOP;
-  
-  -- Update campaign total recipients
-  UPDATE campaigns SET 
-    total_recipients = (
-      SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = p_campaign_id
-    ),
-    updated_at = now()
-  WHERE id = p_campaign_id;
-  
-  RETURN added_count;
-END;
-$$ language 'plpgsql';
-
--- =====================================
--- VIEWS FOR CAMPAIGNS MODULE
--- =====================================
-
--- View for active templates
-CREATE VIEW active_templates AS
-SELECT 
-  id, name, description, category, subject, 
-  body_html, body_text, variables, status,
-  usage_count, success_rate, open_rate, click_rate,
-  created_by, created_at, updated_at, last_used_at
-FROM email_templates 
-WHERE status = 'active';
-
--- View for campaign summary
-CREATE VIEW campaign_summary AS
-SELECT 
-  c.id, c.name, c.description, c.status,
-  c.total_recipients, c.emails_sent, c.emails_delivered,
-  c.emails_opened, c.emails_clicked, c.emails_bounced,
-  c.open_rate, c.click_rate, c.bounce_rate,
-  c.created_by, c.created_at, c.scheduled_at, c.completed_at,
-  t.name as template_name, t.category as template_category,
-  u.full_name as created_by_name
-FROM campaigns c
-LEFT JOIN email_templates t ON c.template_id = t.id
-LEFT JOIN users u ON c.created_by = u.id;
-
--- View for high-performing campaigns
-CREATE VIEW high_performing_campaigns AS
-SELECT 
-  id, name, open_rate, click_rate, emails_sent,
-  status, created_at, completed_at
-FROM campaigns 
-WHERE status = 'completed' 
-  AND emails_sent > 0 
-  AND open_rate >= 20.00 -- 20% or higher open rate
-ORDER BY open_rate DESC, click_rate DESC;
-
--- =====================================
--- INITIAL DATA FOR CAMPAIGNS MODULE
--- =====================================
-
--- Insert default email templates
-INSERT INTO email_templates (
-  id, name, description, category, subject, body_html, body_text, variables, created_by
-) VALUES 
-(
-  uuid_generate_v4(),
-  'Lead Introduction Template',
-  'Basic template for introducing our services to new leads',
-  'introduction',
-  'Hola {{company_name}} - Servicios de Energía Solar',
-  '<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{{subject}}</title>
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2c5aa0;">Hola {{company_name}},</h2>
-        
-        <p>Nos dirigimos a ustedes desde <strong>RitterFinder</strong> porque hemos identificado que su empresa se dedica a {{activity}}.</p>
-        
-        <p>Especializamos en ayudar a empresas como la suya a:</p>
-        <ul>
-            <li>Reducir costos energéticos significativamente</li>
-            <li>Implementar soluciones de energía sostenible</li>
-            <li>Mejorar la eficiencia operacional</li>
-        </ul>
-        
-        <p>¿Les interesaría conocer más sobre cómo podemos ayudarles?</p>
-        
-        <p>Saludos cordiales,<br>
-        <strong>Equipo RitterFinder</strong></p>
-        
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-            <p>Si no deseas recibir más emails, puedes <a href="{{unsubscribe_url}}">darte de baja aquí</a>.</p>
-        </div>
-    </div>
-</body>
-</html>',
-  'Hola {{company_name}},
-
-Nos dirigimos a ustedes desde RitterFinder porque hemos identificado que su empresa se dedica a {{activity}}.
-
-Especializamos en ayudar a empresas como la suya a:
-- Reducir costos energéticos significativamente
-- Implementar soluciones de energía sostenible
-- Mejorar la eficiencia operacional
-
-¿Les interesaría conocer más sobre cómo podemos ayudarles?
-
-Saludos cordiales,
-Equipo RitterFinder
-
----
-Si no deseas recibir más emails, puedes darte de baja en: {{unsubscribe_url}}',
-  '["company_name", "activity", "unsubscribe_url"]',
-  (SELECT id FROM users WHERE email = 'admin@ritterfinder.com' LIMIT 1)
-);
-
--- Insert template variables for the default template
-INSERT INTO template_variables (template_id, variable_name, variable_type, default_value, is_required, description)
-SELECT 
-  t.id,
-  var.name,
-  var.type,
-  var.default_val,
-  var.required,
-  var.desc
-FROM email_templates t,
-LATERAL (VALUES 
-  ('company_name', 'text', '', true, 'Name of the recipient company'),
-  ('activity', 'text', '', true, 'Business activity of the company'),
-  ('unsubscribe_url', 'url', '#', true, 'URL for unsubscribing from emails')
-) AS var(name, type, default_val, required, desc)
-WHERE t.name = 'Lead Introduction Template';
-
--- Log initialization
-INSERT INTO system_logs (level, message, source, metadata) VALUES
-('info', 'Campaigns module initialized successfully', 'system', '{"module": "campaigns", "version": "1.0", "tables": ["email_templates", "template_variables", "campaigns", "campaign_recipients"]}');
-
-COMMIT;
+COMMIT; 

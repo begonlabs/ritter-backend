@@ -31,7 +31,7 @@ SELECT
   al.execution_time_ms,
   al.response_status
 FROM activity_logs al
-LEFT JOIN users u ON al.user_id = u.id
+LEFT JOIN user_profiles u ON al.user_id = u.id
 ORDER BY al.timestamp DESC;
 
 -- View for campaign history
@@ -59,7 +59,7 @@ SELECT
     ELSE 'info'
   END as status_type
 FROM campaigns c
-LEFT JOIN users u ON c.created_by = u.id
+LEFT JOIN user_profiles u ON c.created_by = u.id
 LEFT JOIN email_templates t ON c.template_id = t.id
 ORDER BY c.created_at DESC;
 
@@ -95,62 +95,14 @@ SELECT
     ELSE NULL
   END as duration_seconds
 FROM search_history sh
-LEFT JOIN users u ON sh.user_id = u.id
+LEFT JOIN user_profiles u ON sh.user_id = u.id
 LEFT JOIN search_configurations sc ON sh.search_config_id = sc.id
 ORDER BY sh.started_at DESC;
 
--- View for user session history
-CREATE VIEW user_session_history AS
-SELECT 
-  us.id,
-  us.user_id,
-  u.full_name as user_name,
-  u.email as user_email,
-  us.created_at as login_time,
-  us.logout_at,
-  us.logout_reason,
-  us.ip_address,
-  us.device_type,
-  us.browser,
-  us.os,
-  us.country,
-  us.city,
-  us.is_active,
-  CASE 
-    WHEN us.logout_at IS NOT NULL THEN 
-      EXTRACT(EPOCH FROM (us.logout_at - us.created_at))::INTEGER
-    ELSE 
-      EXTRACT(EPOCH FROM (now() - us.created_at))::INTEGER
-  END as session_duration_seconds
-FROM user_sessions us
-LEFT JOIN users u ON us.user_id = u.id
-ORDER BY us.created_at DESC;
-
--- View for authentication history
-CREATE VIEW authentication_history AS
-SELECT 
-  al.id,
-  al.user_id,
-  u.full_name as user_name,
-  u.email as user_email,
-  al.email as attempted_email,
-  al.event_type,
-  al.success,
-  al.failure_reason,
-  al.risk_score,
-  al.ip_address,
-  al.country,
-  al.city,
-  al.created_at,
-  CASE 
-    WHEN al.success THEN 'success'
-    WHEN al.risk_score >= 60 THEN 'danger'
-    WHEN al.event_type = 'login_failure' THEN 'warning'
-    ELSE 'info'
-  END as alert_level
-FROM auth_logs al
-LEFT JOIN users u ON al.user_id = u.id
-ORDER BY al.created_at DESC;
+-- =====================================
+-- NOTE: Session and authentication history are managed by Supabase Auth
+-- These views are not needed with Supabase self-hosted
+-- =====================================
 
 -- =====================================
 -- HISTORY FUNCTIONS
@@ -196,7 +148,7 @@ BEGIN
   FROM activity_logs al
   LEFT JOIN campaigns c ON al.resource_type = 'campaigns' AND al.resource_id = c.id
   LEFT JOIN leads l ON al.resource_type = 'leads' AND al.resource_id = l.id
-  LEFT JOIN users u2 ON al.resource_type = 'users' AND al.resource_id = u2.id
+  LEFT JOIN user_profiles u2 ON al.resource_type = 'users' AND al.resource_id = u2.id
   LEFT JOIN email_templates et ON al.resource_type = 'email_templates' AND al.resource_id = et.id
   WHERE al.user_id = p_user_id
     AND al.timestamp >= CURRENT_DATE - (p_days_back || ' days')::INTERVAL
@@ -227,7 +179,7 @@ BEGIN
     jsonb_build_object('template', t.name, 'created_by', u.full_name)
   FROM campaigns c
   LEFT JOIN email_templates t ON c.template_id = t.id
-  LEFT JOIN users u ON c.created_by = u.id
+  LEFT JOIN user_profiles u ON c.created_by = u.id
   WHERE c.id = p_campaign_id
   
   UNION ALL
@@ -378,12 +330,7 @@ BEGIN
   FROM activity_logs 
   WHERE DATE(timestamp) < cutoff_date;
   
-  RETURN QUERY
-  SELECT 
-    'auth_logs'::TEXT,
-    COUNT(*)::INTEGER
-  FROM auth_logs 
-  WHERE DATE(created_at) < cutoff_date;
+  -- Note: auth_logs are managed by Supabase and don't need archiving
   
   RETURN QUERY
   SELECT 

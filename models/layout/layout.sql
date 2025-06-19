@@ -25,18 +25,18 @@ BEGIN
   SELECT 
     u.id as user_id,
     u.full_name,
-    u.email,
+    COALESCE(au.email, '') as email,
     r.name as role_name,
-    u.last_login_at,
-    us.expires_at as session_expires_at,
+    u.last_activity_at as last_login_at,
+    NULL::TIMESTAMP as session_expires_at,
     (
       SELECT COUNT(*)::BIGINT 
       FROM notifications n 
       WHERE n.user_id = u.id AND n.is_read = false
     ) as unread_notifications_count
-  FROM users u
+  FROM user_profiles u
+  LEFT JOIN auth.users au ON u.id = au.id
   LEFT JOIN roles r ON u.role_id = r.id
-  LEFT JOIN user_sessions us ON us.user_id = u.id AND us.is_active = true
   WHERE u.id = p_user_id
   LIMIT 1;
 END;
@@ -92,17 +92,7 @@ BEGIN
   END IF;
 END $$;
 
--- Índice para sesiones activas (si no existe ya)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_indexes 
-    WHERE indexname = 'idx_user_sessions_active'
-  ) THEN
-    CREATE INDEX idx_user_sessions_active 
-    ON user_sessions(user_id, is_active, expires_at);
-  END IF;
-END $$;
+-- NOTE: User sessions are managed by Supabase Auth, no index needed
 
 -- =====================================
 -- LOG DE INICIALIZACIÓN

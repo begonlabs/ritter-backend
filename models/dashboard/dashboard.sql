@@ -24,15 +24,14 @@ SELECT
 FROM leads l
 CROSS JOIN campaigns c 
 CROSS JOIN search_history sh
-CROSS JOIN users u
-WHERE u.status = 'active';
+CROSS JOIN auth.users u;
 
 -- View for recent activity feed
 CREATE VIEW recent_activity_feed AS
 SELECT 
   al.id,
   al.user_id,
-  u.full_name as user_name,
+  up.full_name as user_name,
   al.activity_type,
   al.action,
   al.description,
@@ -41,7 +40,7 @@ SELECT
   al.timestamp,
   al.ip_address
 FROM activity_logs al
-LEFT JOIN users u ON al.user_id = u.id
+LEFT JOIN user_profiles up ON al.user_id = up.id
 ORDER BY al.timestamp DESC
 LIMIT 50;
 
@@ -62,10 +61,10 @@ SELECT
   c.created_at,
   c.completed_at,
   t.name as template_name,
-  u.full_name as created_by_name
+  up.full_name as created_by_name
 FROM campaigns c
 LEFT JOIN email_templates t ON c.template_id = t.id
-LEFT JOIN users u ON c.created_by = u.id
+LEFT JOIN user_profiles up ON c.created_by = up.id
 ORDER BY c.created_at DESC;
 
 -- View for lead quality distribution
@@ -137,7 +136,7 @@ BEGIN
   FROM leads l
   FULL OUTER JOIN campaigns c ON DATE(c.created_at) BETWEEN p_start_date AND p_end_date
   FULL OUTER JOIN search_history sh ON DATE(sh.started_at) BETWEEN p_start_date AND p_end_date
-  FULL OUTER JOIN users u ON u.status = 'active' AND DATE(u.created_at) BETWEEN p_start_date AND p_end_date
+  FULL OUTER JOIN user_profiles u ON DATE(u.created_at) BETWEEN p_start_date AND p_end_date
   WHERE DATE(l.created_at) BETWEEN p_start_date AND p_end_date;
   
   -- Get previous period stats for growth calculation
@@ -201,12 +200,11 @@ BEGIN
       ORDER BY COUNT(*) DESC 
       LIMIT 1
     ) as favorite_activity
-  FROM users u
+  FROM user_profiles u
   LEFT JOIN search_history sh ON u.id = sh.user_id
   LEFT JOIN campaigns c ON u.id = c.created_by
   LEFT JOIN activity_logs al ON u.id = al.user_id
-  WHERE u.status = 'active'
-    AND (p_user_id IS NULL OR u.id = p_user_id)
+  WHERE (p_user_id IS NULL OR u.id = p_user_id)
   GROUP BY u.id, u.full_name
   ORDER BY last_activity DESC;
 END;
@@ -271,8 +269,7 @@ SELECT
 FROM leads l
 CROSS JOIN campaigns c 
 CROSS JOIN search_history sh
-CROSS JOIN users u
-WHERE u.status = 'active';
+CROSS JOIN user_profiles u;
 
 -- Create index on materialized view
 CREATE UNIQUE INDEX idx_daily_dashboard_stats_date ON daily_dashboard_stats(stats_date);

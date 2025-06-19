@@ -196,12 +196,12 @@ CREATE INDEX idx_website_sources_success_leads ON website_sources(success_rate, 
 -- =====================================
 
 -- Analytics data foreign keys
-ALTER TABLE analytics_data ADD CONSTRAINT fk_analytics_data_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE analytics_data ADD CONSTRAINT fk_analytics_data_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id);
 ALTER TABLE analytics_data ADD CONSTRAINT fk_analytics_data_campaign_id FOREIGN KEY (campaign_id) REFERENCES campaigns(id);
 ALTER TABLE analytics_data ADD CONSTRAINT fk_analytics_data_search_history_id FOREIGN KEY (search_history_id) REFERENCES search_history(id);
 
 -- Scraping stats foreign keys
-ALTER TABLE scraping_stats ADD CONSTRAINT fk_scraping_stats_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE scraping_stats ADD CONSTRAINT fk_scraping_stats_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id);
 ALTER TABLE scraping_stats ADD CONSTRAINT fk_scraping_stats_search_history_id FOREIGN KEY (search_history_id) REFERENCES search_history(id);
 
 -- =====================================

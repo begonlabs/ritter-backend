@@ -129,10 +129,10 @@ CREATE INDEX idx_search_history_user_started ON search_history(user_id, started_
 -- =====================================
 
 -- Search configurations foreign keys
-ALTER TABLE search_configurations ADD CONSTRAINT fk_search_configurations_created_by FOREIGN KEY (created_by) REFERENCES users(id);
+ALTER TABLE search_configurations ADD CONSTRAINT fk_search_configurations_created_by FOREIGN KEY (created_by) REFERENCES auth.users(id);
 
 -- Search history foreign keys
-ALTER TABLE search_history ADD CONSTRAINT fk_search_history_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE search_history ADD CONSTRAINT fk_search_history_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id);
 ALTER TABLE search_history ADD CONSTRAINT fk_search_history_search_config_id FOREIGN KEY (search_config_id) REFERENCES search_configurations(id);
 
 -- =====================================
@@ -226,7 +226,7 @@ BEGIN
     sc.id, sc.name, sc.description, sc.usage_count, sc.last_used_at,
     u.full_name as created_by_name, sc.is_template, sc.is_public
   FROM search_configurations sc
-  LEFT JOIN users u ON sc.created_by = u.id
+  LEFT JOIN user_profiles u ON sc.created_by = u.id
   WHERE sc.is_public = true OR sc.is_template = true
   ORDER BY sc.usage_count DESC, sc.last_used_at DESC
   LIMIT p_limit;
@@ -293,7 +293,7 @@ SELECT
   sh.execution_time_ms, sh.started_at, sh.completed_at,
   u.full_name as user_name, sc.name as config_name
 FROM search_history sh
-LEFT JOIN users u ON sh.user_id = u.id
+LEFT JOIN user_profiles u ON sh.user_id = u.id
 LEFT JOIN search_configurations sc ON sh.search_config_id = sc.id
 ORDER BY sh.started_at DESC;
 
@@ -316,7 +316,7 @@ SELECT
   sc.keywords, sc.exclude_keywords, sc.usage_count, sc.last_used_at,
   u.full_name as created_by_name, sc.created_at
 FROM search_configurations sc
-LEFT JOIN users u ON sc.created_by = u.id
+LEFT JOIN user_profiles u ON sc.created_by = u.id
 WHERE sc.is_public = true
 ORDER BY sc.usage_count DESC, sc.name;
 
@@ -324,45 +324,9 @@ ORDER BY sc.usage_count DESC, sc.name;
 -- INITIAL DATA FOR SEARCH MODULE
 -- =====================================
 
--- Insert default search configuration templates
-INSERT INTO search_configurations (
-  id, name, description, client_types, locations, 
-  validate_emails, validate_websites, validate_phones,
-  keywords, is_template, is_public, created_by
-) VALUES 
-(
-  uuid_generate_v4(),
-  'Empresas Solares Madrid',
-  'Configuración para buscar empresas de energía solar en Madrid',
-  '["solar", "energy"]',
-  '["Madrid"]',
-  true, true, false,
-  'energía solar, paneles solares, instalación solar',
-  true, true,
-  (SELECT id FROM users WHERE email LIKE '%admin%' LIMIT 1)
-),
-(
-  uuid_generate_v4(),
-  'Constructoras Barcelona',
-  'Configuración para buscar empresas constructoras en Barcelona',
-  '["construction", "commercial"]',
-  '["Barcelona"]',
-  true, true, false,
-  'construcción, edificios, obras',
-  true, true,
-  (SELECT id FROM users WHERE email LIKE '%admin%' LIMIT 1)
-),
-(
-  uuid_generate_v4(),
-  'Industrias Valencia',
-  'Configuración para buscar empresas industriales en Valencia',
-  '["industrial"]',
-  '["Valencia"]',
-  true, false, true,
-  'industria, manufactura, producción',
-  true, true,
-  (SELECT id FROM users WHERE email LIKE '%admin%' LIMIT 1)
-);
+-- NOTE: Default search configuration templates should be created after 
+-- initial admin user is created in user_profiles table
+-- These can be added manually through the admin interface
 
 -- Log initialization
 INSERT INTO system_logs (level, message, source, metadata) VALUES

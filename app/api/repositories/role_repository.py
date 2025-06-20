@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
 
-from app.repositories.base import BaseRepository
-from app.models.user import Role, UserProfile
+from app.api.repositories.base import BaseRepository
+from app.api.models.user import Role, UserProfile
 
 
 class RoleRepository(BaseRepository[Role, dict, dict]):

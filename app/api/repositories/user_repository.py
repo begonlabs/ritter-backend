@@ -4,9 +4,9 @@ from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from app.repositories.base import BaseRepository
-from app.models.user import UserProfile, Role
-from app.schemas.user import UpdateProfileRequest
+from app.api.repositories.base import BaseRepository
+from app.api.models.user import UserProfile, Role
+from app.api.schemas.user import UpdateProfileRequest
 
 
 

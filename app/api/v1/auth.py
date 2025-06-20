@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.api.dependencies import get_database
 from app.api.services.user_service import UserProfileService
+from app.api.services.activity_log_service import ActivityLogService
 from app.api.schemas.user import UserProfileResponse, UpdateProfileRequest, InviteUserRequest, InviteUserResponse
+from app.api.schemas.activity_log import LogActivityRequest, LogActivityResponse
 from app.core.permissions import require_permissions
 
 router = APIRouter()
@@ -137,4 +139,39 @@ async def get_user_permissions(
         raise HTTPException(
             status_code=500,
             detail=f"Error retrieving user permissions: {str(e)}"
+        )
+
+
+@router.post("/log-activity", response_model=LogActivityResponse)
+async def log_activity(
+    activity_data: LogActivityRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_database)
+):
+    try:
+        activity_service = ActivityLogService(db)
+        
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        
+        activity_log = await activity_service.log_activity(
+            supabase_user_id=current_user["sub"],
+            activity_data=activity_data,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        return LogActivityResponse(
+            message="Activity logged successfully",
+            activity_id=activity_log.id,
+            logged_at=activity_log.created_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error logging activity: {str(e)}"
         )

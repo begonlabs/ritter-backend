@@ -5,6 +5,8 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 import uuid
 
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
@@ -24,6 +26,8 @@ class UserProfile(Base):
 
     role_id = Column(UUID(as_uuid = True), ForeignKey("roles.id"), nullable = True)
     role = relationship("Role", back_populates = "users")
+    
+    activity_logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<UserProfile(id={self.id}, full_name='{self.full_name}')>"

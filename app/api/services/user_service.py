@@ -145,19 +145,21 @@ class UserProfileService:
 
 
     async def initialize_default_roles(self):
-        """
-        Inicializa roles por defecto si no existen
-        """
         default_roles = [
             {
                 "name": "admin",
                 "description": "Administrator with full access",
-                "permissions": ["admin.*", "users.*", "roles.*"]
+                "permissions": ["admin.*", "users.*", "roles.*", "system.*"]
+            },
+            {
+                "name": "manager",
+                "description": "Manager with elevated permissions",
+                "permissions": ["users.update", "users.read", "roles.read"]
             },
             {
                 "name": "user", 
                 "description": "Standard user",
-                "permissions": ["profile.read", "profile.update"]
+                "permissions": ["profile.read", "profile.update", "notifications.read"]
             }
         ]
         

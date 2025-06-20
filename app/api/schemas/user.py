@@ -45,3 +45,23 @@ class UpdateProfileRequest(BaseModel):
                 }
             }
         }
+
+
+class InviteUserRequest(BaseModel):
+    email: EmailStr
+    full_name: str
+    role_id: UUID
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "newuser@usuario.com",
+                "full_name": "New User",
+                "role_id": "da415454-e3ce-450a-936e-3e6c370c495e"
+            }
+        }
+
+
+class InviteUserResponse(BaseModel):
+    message: str
+    user: Dict[str, Any]

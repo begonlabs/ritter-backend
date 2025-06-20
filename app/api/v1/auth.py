@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.api.dependencies import get_database
 from app.api.services.user_service import UserProfileService
-from app.api.schemas.user import UserProfileResponse, UpdateProfileRequest
+from app.api.schemas.user import UserProfileResponse, UpdateProfileRequest, InviteUserRequest, InviteUserResponse
+from app.core.permissions import require_permissions
 
 router = APIRouter()
+
 
 
 @router.get("/me")
@@ -53,7 +55,7 @@ async def update_user_profile(
         updated_profile = await user_service.update_user_profile(
             current_user["sub"], 
             update_data,
-            current_user 
+            current_user  
         )
         
         return {
@@ -67,6 +69,35 @@ async def update_user_profile(
         raise HTTPException(
             status_code=500,
             detail=f"Error updating user profile: {str(e)}"
+        )
+
+
+@router.post("/invite-user", response_model=InviteUserResponse)
+async def invite_user(
+    invite_data: InviteUserRequest,
+    admin_profile = Depends(require_permissions(["admin.users.create"])),
+    db: Session = Depends(get_database)
+):
+    try:
+        user_service = UserProfileService(db)
+        
+        invited_user = await user_service.invite_user(
+            email=invite_data.email,
+            full_name=invite_data.full_name,
+            role_id=str(invite_data.role_id)
+        )
+        
+        return InviteUserResponse(
+            message="User invited successfully",
+            user=invited_user
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inviting user: {str(e)}"
         )
 
 

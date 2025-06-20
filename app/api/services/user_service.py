@@ -37,7 +37,7 @@ class UserProfileService:
         if "user_metadata" in supabase_user_data:
             metadata = supabase_user_data["user_metadata"]
             full_name = metadata.get("full_name") or metadata.get("name")
-        
+
         default_role = self.db.query(Role).filter(Role.name == "user").first()
         
         db_profile = UserProfile(
@@ -96,7 +96,52 @@ class UserProfileService:
         
         self.db.commit()
         self.db.refresh(db_profile)
+
         return await self._build_user_profile_response(db_profile, current_supabase_data)
+
+
+    async def invite_user(self, email: str, full_name: str, role_id: str) -> dict:
+        try:
+            role = self.db.query(Role).filter(Role.id == role_id).first()
+            if not role:
+                raise HTTPException(status_code=400, detail="Invalid role ID")
+            
+            response = supabase.auth.admin.invite_user_by_email(
+                email=email,
+                options={
+                    "data": {
+                        "full_name": full_name,
+                        "invited_by_admin": True
+                    }
+                }
+            )
+
+            db_profile = UserProfile(
+                supabase_user_id=response.user.id,
+                full_name=full_name,
+                user_metadata={"invited_by_admin": True},
+                role_id=role_id,
+                created_at=datetime.utcnow(),
+                last_activity_at=datetime.utcnow()
+            )
+            
+            self.db.add(db_profile)
+            self.db.commit()
+            self.db.refresh(db_profile)
+            
+            return {
+                "id": response.user.id,
+                "email": response.user.email,
+                "full_name": full_name,
+                "invited_at": response.user.created_at
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error inviting user: {str(e)}"
+            )
 
 
     async def initialize_default_roles(self):

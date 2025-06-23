@@ -1095,7 +1095,7 @@ requires-dist = [
     { name = "jwt", specifier = ">=1.3.1" },
     { name = "psycopg2", specifier = ">=2.9.10" },
     { name = "python-jose", specifier = ">=3.5.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.41" },
+    { name = "sqlalchemy", extras = ["sqlite"], specifier = ">=2.0.41" },
     { name = "supabase", specifier = ">=2.15.3" },
 ]
 

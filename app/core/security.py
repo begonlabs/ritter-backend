@@ -6,7 +6,7 @@ from app.config import settings
 security = HTTPBearer()
 
 supabase: Client = create_client(
-    f"https://{settings.SUPABASE_PROJECT_ID}.supabase.co",
+    f"https://{settings.SUPABASE_PROJECT_ID}",
     settings.SUPABASE_ANON_KEY
 )
 

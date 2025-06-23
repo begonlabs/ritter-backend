@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    ALGORITHM: str = "RS256"
+    ALGORITHM: str = "HS256"
     
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
     

@@ -4,6 +4,9 @@ from .role_repository import RoleRepository
 from .activity_log_repository import ActivityLogRepository
 from .notification_repository import NotificationRepository
 from .system_settings_repository import SystemSettingsRepository
+from .search_configuration_repository import SearchConfigurationRepository
+from .search_history_repository import SearchHistoryRepository
+from .lead_repository import LeadRepository
 
 __all__ = [
     "BaseRepository",
@@ -11,5 +14,8 @@ __all__ = [
     "RoleRepository",
     "ActivityLogRepository",
     "NotificationRepository",
-    "SystemSettingsRepository"
+    "SystemSettingsRepository",
+    "SearchConfigurationRepository",
+    "SearchHistoryRepository",
+    "LeadRepository"
 ]

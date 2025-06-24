@@ -6,10 +6,12 @@ from app.config import settings
 from app.api.dependencies import get_database
 from app.core.database import check_database_connection
 
-from app.api.v1 import auth, health, admin, layout
+from app.api.v1 import auth, health, admin, layout, search, results
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(layout.router, prefix="/layout", tags=["layout"])
+api_router.include_router(search.router, prefix="/search", tags=["search"])
+api_router.include_router(results.router, prefix="/results", tags=["results"])

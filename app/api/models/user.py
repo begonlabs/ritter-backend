@@ -28,6 +28,7 @@ class UserProfile(Base):
     role = relationship("Role", back_populates = "users")
     
     activity_logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<UserProfile(id={self.id}, full_name='{self.full_name}')>"

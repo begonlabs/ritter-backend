@@ -19,7 +19,6 @@ from app.core.permissions import require_permissions
 router = APIRouter()
 
 
-
 @router.get("/users", response_model=AdminUsersListResponse)
 async def get_users(
     page: int = Query(1, ge=1),
@@ -46,7 +45,7 @@ async def get_users(
         for user in result["users"]:
             users_data.append({
                 "id": str(user.id),
-                "email": user.supabase_user_id,
+                "email": user.supabase_user_id,  # Temporal: debería venir de auth.users
                 "full_name": user.full_name,
                 "role_id": str(user.role_id) if user.role_id else None,
                 "role_name": user.role.name if user.role else None,
@@ -54,8 +53,8 @@ async def get_users(
                 "last_login_at": user.last_activity_at,
                 "email_verified_at": None,
                 "two_factor_enabled": False,
-                "invited_by": None,
-                "invited_at": None,
+                "invited_by": str(user.invited_by) if user.invited_by else None,
+                "invited_at": user.invited_at,
                 "created_at": user.created_at,
                 "updated_at": user.updated_at
             })
@@ -71,7 +70,37 @@ async def get_users(
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving users: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error marking all notifications as read: {str(e)}")
+
+
+@router.delete("/notifications/{notification_id}")
+async def archive_notification(
+    notification_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_database)
+):
+    """Archive notification"""
+    try:
+        from app.api.services.notification_service import NotificationService
+        from app.api.services.user_service import UserProfileService
+        
+        user_service = UserProfileService(db)
+        notification_service = NotificationService(db)
+        
+        # Get user profile to get the actual user ID
+        profile = await user_service.get_or_create_user_profile(current_user)
+        
+        notification = await notification_service.archive_notification(
+            notification_id=notification_id,
+            user_id=UUID(profile.id)
+        )
+        
+        return {"message": "Notification archived successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error archiving notification: {str(e)}")=f"Error retrieving users: {str(e)}")
 
 
 @router.get("/users/{user_id}", response_model=AdminUserDetailResponse)
@@ -89,7 +118,7 @@ async def get_user_by_id(
         
         return AdminUserDetailResponse(
             id=str(user.id),
-            email=user.supabase_user_id,
+            email=user.supabase_user_id,  # Temporal: debería venir de auth.users
             full_name=user.full_name,
             role_id=str(user.role_id) if user.role_id else None,
             role={
@@ -103,7 +132,7 @@ async def get_user_by_id(
             email_verified_at=None,
             two_factor_enabled=False,
             invited_by=None,
-            invited_at=None,
+            invited_at=user.invited_at,
             password_set_at=None,
             failed_login_attempts=0,
             locked_until=None,
@@ -203,7 +232,6 @@ async def activate_user(
     admin_profile = Depends(require_permissions(["admin.users.update"])),
     db: Session = Depends(get_database)
 ):
-    """Activate user account"""
     try:
         return {
             "message": "User activated successfully",
@@ -223,7 +251,6 @@ async def deactivate_user(
     admin_profile = Depends(require_permissions(["admin.users.update"])),
     db: Session = Depends(get_database)
 ):
-    """Deactivate user account"""
     try:
         return {
             "message": "User deactivated successfully",
@@ -243,7 +270,6 @@ async def reset_user_password(
     admin_profile = Depends(require_permissions(["admin.users.update"])),
     db: Session = Depends(get_database)
 ):
-    """Send password reset email to user"""
     try:
         return {"message": "Password reset email sent successfully"}
     except Exception as e:
@@ -420,10 +446,15 @@ async def get_permissions(
                 {"id": "17", "name": "admin.roles.create", "description": "Create roles", "resource": "roles", "action": "create"},
                 {"id": "18", "name": "admin.roles.update", "description": "Update roles", "resource": "roles", "action": "update"},
                 {"id": "19", "name": "admin.roles.delete", "description": "Delete roles", "resource": "roles", "action": "delete"},
+                {"id": "20", "name": "admin.settings.read", "description": "View settings", "resource": "settings", "action": "read"},
+                {"id": "21", "name": "admin.settings.update", "description": "Update settings", "resource": "settings", "action": "update"},
+            ],
+            "notifications": [
+                {"id": "22", "name": "notifications.read", "description": "View notifications", "resource": "notifications", "action": "read"},
             ],
             "settings": [
-                {"id": "20", "name": "settings.read", "description": "View settings", "resource": "settings", "action": "read"},
-                {"id": "21", "name": "settings.update", "description": "Update settings", "resource": "settings", "action": "update"},
+                {"id": "23", "name": "settings.read", "description": "View settings", "resource": "settings", "action": "read"},
+                {"id": "24", "name": "settings.update", "description": "Update settings", "resource": "settings", "action": "update"},
             ]
         }
         
@@ -442,7 +473,8 @@ async def get_permission_categories(
             {"name": "leads", "label": "Gestión de Leads", "permission_count": 4},
             {"name": "campaigns", "label": "Campañas", "permission_count": 4},
             {"name": "analytics", "label": "Analíticas", "permission_count": 2},
-            {"name": "admin", "label": "Administración", "permission_count": 9},
+            {"name": "admin", "label": "Administración", "permission_count": 10},
+            {"name": "notifications", "label": "Notificaciones", "permission_count": 1},
             {"name": "settings", "label": "Configuración", "permission_count": 2}
         ]
         
@@ -483,7 +515,7 @@ async def get_activity_logs(
                 "ip_address": activity.ip_address,
                 "user_agent": activity.user_agent,
                 "changes": activity.activity_metadata,
-                "execution_time_ms": 0,
+                "execution_time_ms": 0,  # Placeholder
                 "timestamp": activity.created_at
             })
         
@@ -525,3 +557,192 @@ async def get_activity_summary(
         return AdminActivitySummaryResponse(summary=summary_data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving activity summary: {str(e)}")
+
+
+# System Settings Endpoints
+@router.get("/settings")
+async def get_system_settings(
+    category: Optional[str] = Query(None),
+    is_public: Optional[bool] = Query(None),
+    admin_profile = Depends(require_permissions(["admin.settings.read"])),
+    db: Session = Depends(get_database)
+):
+    """Get system settings grouped by category"""
+    try:
+        from app.api.services.system_settings_service import SystemSettingsService
+        settings_service = SystemSettingsService(db)
+        
+        settings = await settings_service.get_all_settings(
+            include_private=True,
+            category=category,
+            is_public=is_public
+        )
+        
+        return {"settings": settings}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving settings: {str(e)}")
+
+
+@router.get("/settings/{setting_id}")
+async def get_system_setting(
+    setting_id: UUID,
+    admin_profile = Depends(require_permissions(["admin.settings.read"])),
+    db: Session = Depends(get_database)
+):
+    """Get specific system setting"""
+    try:
+        from app.api.services.system_settings_service import SystemSettingsService
+        settings_service = SystemSettingsService(db)
+        
+        setting = await settings_service.get_setting_by_id(setting_id)
+        return {"setting": setting}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving setting: {str(e)}")
+
+
+@router.put("/settings/{setting_id}")
+async def update_system_setting(
+    setting_id: UUID,
+    update_data: dict,
+    admin_profile = Depends(require_permissions(["admin.settings.update"])),
+    db: Session = Depends(get_database)
+):
+    """Update system setting"""
+    try:
+        from app.api.services.system_settings_service import SystemSettingsService
+        from app.api.schemas.system_settings import UpdateSystemSettingRequest
+        
+        settings_service = SystemSettingsService(db)
+        
+        # Validate update data
+        if "value" not in update_data:
+            raise HTTPException(status_code=400, detail="Value is required")
+        
+        update_request = UpdateSystemSettingRequest(
+            value=update_data["value"],
+            description=update_data.get("description")
+        )
+        
+        updated_setting = await settings_service.update_setting(
+            setting_id=setting_id,
+            update_data=update_request,
+            updated_by=admin_profile.id
+        )
+        
+        return {
+            "setting": {
+                "id": str(updated_setting.id),
+                "key": updated_setting.key,
+                "value": updated_setting.value,
+                "updated_at": updated_setting.updated_at,
+                "updated_by": str(updated_setting.updated_by)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating setting: {str(e)}")
+
+
+# Notification Endpoints
+@router.get("/notifications")
+async def get_notifications(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    is_read: Optional[bool] = Query(None),
+    type: Optional[str] = Query(None),
+    admin_profile = Depends(require_permissions(["notifications.read"])),
+    db: Session = Depends(get_database)
+):
+    """Get notifications for current user"""
+    try:
+        from app.api.services.notification_service import NotificationService
+        notification_service = NotificationService(db)
+        
+        # For admin, get their own notifications
+        unread_only = is_read is False if is_read is not None else False
+        
+        result = await notification_service.get_user_notifications(
+            user_id=admin_profile.id,
+            unread_only=unread_only,
+            page=page,
+            limit=limit
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving notifications: {str(e)}")
+
+
+@router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_database)
+):
+    """Mark notification as read"""
+    try:
+        from app.api.services.notification_service import NotificationService
+        from app.api.services.user_service import UserProfileService
+        
+        user_service = UserProfileService(db)
+        notification_service = NotificationService(db)
+        
+        # Get user profile to get the actual user ID
+        profile = await user_service.get_or_create_user_profile(current_user)
+        
+        notification = await notification_service.mark_notification_as_read(
+            notification_id=notification_id,
+            user_id=UUID(profile.id)
+        )
+        
+        return {
+            "message": "Notification marked as read",
+            "notification": {
+                "id": str(notification.id),
+                "is_read": True,
+                "read_at": notification.read_at
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error marking notification as read: {str(e)}")
+
+
+@router.put("/notifications/read-all")
+async def mark_all_notifications_read(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_database)
+):
+    """Mark all notifications as read for current user"""
+    try:
+        from app.api.services.notification_service import NotificationService
+        from app.api.services.user_service import UserProfileService
+        
+        user_service = UserProfileService(db)
+        notification_service = NotificationService(db)
+        
+        # Get user profile to get the actual user ID
+        profile = await user_service.get_or_create_user_profile(current_user)
+        
+        updated_count = await notification_service.mark_all_notifications_as_read(
+            user_id=UUID(profile.id)
+        )
+        
+        return {
+            "message": "All notifications marked as read",
+            "updated_count": updated_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail

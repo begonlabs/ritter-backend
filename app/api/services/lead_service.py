@@ -424,6 +424,105 @@ class LeadService:
                 "fields_exported": fields or list(export_data[0].keys()) if export_data else []
             }
 
+    async def import_leads_from_json(
+        self,
+        leads_data: List[Dict[str, Any]],
+        skip_duplicates: bool = True,
+        validate_emails: bool = True,
+        validate_phones: bool = False
+    ) -> Dict[str, Any]:
+        """Import leads directly from JSON data"""
+        import_job_id = uuid.uuid4()
+        
+        try:
+            total_rows = len(leads_data)
+            processed_rows = 0
+            imported_leads = 0
+            skipped_duplicates = 0
+            validation_errors = 0
+            error_details = []
+            
+            for lead_data in leads_data:
+                processed_rows += 1
+                
+                try:
+                    # Validate required fields
+                    if not lead_data.get('company_name'):
+                        validation_errors += 1
+                        error_details.append(f"Row {processed_rows}: Missing company_name")
+                        continue
+                    
+                    if not lead_data.get('activity'):
+                        validation_errors += 1
+                        error_details.append(f"Row {processed_rows}: Missing activity")
+                        continue
+                    
+                    # Clean and prepare data
+                    clean_data = {
+                        'company_name': str(lead_data.get('company_name', '')).strip(),
+                        'activity': str(lead_data.get('activity', '')).strip(),
+                        'email': lead_data.get('email'),
+                        'phone': lead_data.get('phone'),
+                        'company_website': lead_data.get('company_website') or lead_data.get('website'),
+                        'address': lead_data.get('address'),
+                        'state': lead_data.get('state') or lead_data.get('provincia'),
+                        'country': lead_data.get('country', 'España'),
+                        'description': lead_data.get('description'),
+                        'category': lead_data.get('category') or lead_data.get('sector'),
+                        'verified_email': lead_data.get('verified_email', False),
+                        'verified_phone': lead_data.get('verified_phone', False),
+                        'verified_website': lead_data.get('verified_website', False)
+                    }
+                    
+                    # Remove None values
+                    clean_data = {k: v for k, v in clean_data.items() if v is not None and str(v).strip() != ''}
+                    
+                    # Check for duplicates
+                    if skip_duplicates and clean_data.get('email'):
+                        existing = self.lead_repo.get_by_field('email', clean_data['email'])
+                        if existing:
+                            skipped_duplicates += 1
+                            continue
+                    
+                    # Alternative duplicate check by company name + state
+                    if skip_duplicates and not clean_data.get('email'):
+                        existing_company = self.lead_repo.search_leads(
+                            search_term=clean_data['company_name'],
+                            states=[clean_data.get('state')] if clean_data.get('state') else None,
+                            limit=1
+                        )
+                        if existing_company:
+                            skipped_duplicates += 1
+                            continue
+                    
+                    # Create lead
+                    self.lead_repo.create(clean_data)
+                    imported_leads += 1
+                    
+                except Exception as e:
+                    validation_errors += 1
+                    error_details.append(f"Row {processed_rows}: {str(e)}")
+                    continue
+            
+            return {
+                "import_job": {
+                    "id": str(import_job_id),
+                    "status": "completed",
+                    "total_rows": total_rows,
+                    "processed_rows": processed_rows,
+                    "imported_leads": imported_leads,
+                    "skipped_duplicates": skipped_duplicates,
+                    "validation_errors": validation_errors,
+                    "error_details": error_details[:10],  # Limit error details
+                    "started_at": datetime.utcnow(),
+                    "completed_at": datetime.utcnow()
+                },
+                "message": f"Import completed. {imported_leads} leads imported, {skipped_duplicates} duplicates skipped, {validation_errors} errors."
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
     async def import_leads(
         self,
         file: UploadFile,

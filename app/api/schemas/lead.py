@@ -174,7 +174,7 @@ class ImportJobSchema(BaseModel):
 
 
 class ImportJobResponse(BaseModel):
-    import: ImportJobSchema
+    import_job: ImportJobSchema  # Renamed from import (reserved keyword)
     message: str
 
 

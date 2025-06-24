@@ -12,32 +12,38 @@ class SearchConfiguration(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-
+    
+    # Search Parameters
     client_types = Column(JSONB, default=list)
     locations = Column(JSONB, default=list)
     websites = Column(JSONB, default=list)
-
+    
+    # Validation Options
     validate_emails = Column(Boolean, default=True)
     validate_websites = Column(Boolean, default=True)
     validate_phones = Column(Boolean, default=False)
-
+    
+    # Advanced Filters
     company_size_min = Column(Integer, nullable=True)
     company_size_max = Column(Integer, nullable=True)
     industries = Column(JSONB, default=list)
     job_titles = Column(JSONB, default=list)
     keywords = Column(String(500), nullable=True)
     exclude_keywords = Column(String(500), nullable=True)
-
+    
+    # System Fields
     created_by = Column(UUID(as_uuid=True), ForeignKey("user_profiles.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     usage_count = Column(Integer, default=0)
-
+    
+    # Configuration
     is_template = Column(Boolean, default=False)
     is_public = Column(Boolean, default=False)
-    metadata = Column(JSONB, default=dict)
+    config_metadata = Column(JSONB, default=dict)  # Renamed from metadata
 
+    # Relationships
     creator = relationship("UserProfile", back_populates="search_configurations")
     search_history = relationship("SearchHistory", back_populates="search_config", cascade="all, delete-orphan")
 

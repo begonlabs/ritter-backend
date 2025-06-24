@@ -21,31 +21,36 @@ class SearchHistory(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("user_profiles.id"), nullable=False, index=True)
     search_config_id = Column(UUID(as_uuid=True), ForeignKey("search_configurations.id"), nullable=True, index=True)
-
+    
+    # Search Details
     query_name = Column(String(255), nullable=True)
     search_parameters = Column(JSONB, nullable=False)
     filters_applied = Column(JSONB, default=dict)
-
+    
+    # Results
     status = Column(Enum(SearchStatus), default=SearchStatus.PENDING, index=True)
     total_results = Column(Integer, default=0)
     valid_results = Column(Integer, default=0)
     duplicate_results = Column(Integer, default=0)
-
+    
+    # Performance
     execution_time_ms = Column(Integer, nullable=True)
     pages_scraped = Column(Integer, default=0)
     websites_searched = Column(JSONB, default=list)
-
+    
+    # System Fields
     started_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
-
+    
+    # Result Storage
     results_file_url = Column(String(500), nullable=True)
     results_summary = Column(JSONB, default=dict)
-    metadata = Column(JSONB, default=dict)
+    search_metadata = Column(JSONB, default=dict)  # Renamed from metadata
 
+    # Relationships
     user = relationship("UserProfile", back_populates="search_history")
     search_config = relationship("SearchConfiguration", back_populates="search_history")
-
 
     def __repr__(self):
         return f"<SearchHistory(id={self.id}, user_id={self.user_id}, status='{self.status}')>"

@@ -242,6 +242,34 @@ async def export_leads(
         raise HTTPException(status_code=500, detail=f"Error exporting leads: {str(e)}")
 
 
+@router.post("/import/json", response_model=ImportJobResponse)
+async def import_leads_from_json(
+    leads_data: List[Dict[str, Any]],
+    skip_duplicates: bool = Query(True),
+    validate_emails: bool = Query(True),
+    validate_phones: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_database)
+):
+    """Import leads directly from JSON data"""
+    try:
+        lead_service = LeadService(db)
+        
+        result = await lead_service.import_leads_from_json(
+            leads_data=leads_data,
+            skip_duplicates=skip_duplicates,
+            validate_emails=validate_emails,
+            validate_phones=validate_phones
+        )
+        
+        return ImportJobResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error importing leads from JSON: {str(e)}")
+
+
 @router.post("/import", response_model=ImportJobResponse)
 async def import_leads(
     file: UploadFile = File(...),

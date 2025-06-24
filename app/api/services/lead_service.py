@@ -11,8 +11,12 @@ from app.api.schemas.lead import (
     ValidateLeadsRequest, DeduplicateLeadsRequest, LeadImportRequest
 )
 from fastapi import HTTPException, UploadFile
-import pandas as pd
-import io
+try:
+    import polars as pl
+    import io
+except ImportError:
+    pl = None
+    io = None
 
 
 class LeadService:
@@ -336,27 +340,89 @@ class LeadService:
             
             export_data.append(lead_data)
         
-        # Generate file
-        file_name = f"leads_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{format}"
+        # Generate file name
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        file_name = f"leads_export_{timestamp}.{format}"
         
-        # For demo purposes, we'll return a placeholder URL
-        # In production, you would:
-        # 1. Generate the actual file
-        # 2. Upload to storage (S3, etc.)
-        # 3. Return the download URL
+        # For JSON format, return the data directly
+        if format == "json":
+            import json
+            json_content = json.dumps(export_data, indent=2, ensure_ascii=False)
+            file_size = len(json_content.encode('utf-8'))
+            
+            return {
+                "export": {
+                    "data": export_data,  # Return actual data for JSON
+                    "file_name": file_name,
+                    "file_size": file_size,
+                    "format": format,
+                    "total_records": len(export_data),
+                    "expires_at": (datetime.utcnow()).isoformat()
+                },
+                "filters_applied": filters or {},
+                "fields_exported": fields or list(export_data[0].keys()) if export_data else []
+            }
         
-        return {
-            "export": {
-                "file_url": f"/exports/{file_name}",
-                "file_name": file_name,
-                "file_size": len(export_data) * 1024,  # Estimated size
-                "format": format,
-                "total_records": len(export_data),
-                "expires_at": (datetime.utcnow()).isoformat()
-            },
-            "filters_applied": filters or {},
-            "fields_exported": fields or list(export_data[0].keys()) if export_data else []
-        }
+        # For other formats (CSV, Excel), generate file content
+        elif format in ["csv", "xlsx"] and pl is not None:
+            try:
+                # Create polars DataFrame
+                df = pl.DataFrame(export_data)
+                
+                if format == "csv":
+                    # Generate CSV content
+                    csv_content = df.write_csv()
+                    file_size = len(csv_content.encode('utf-8'))
+                    
+                    return {
+                        "export": {
+                            "content": csv_content,  # Return actual CSV content
+                            "file_name": file_name,
+                            "file_size": file_size,
+                            "format": format,
+                            "total_records": len(export_data),
+                            "expires_at": (datetime.utcnow()).isoformat()
+                        },
+                        "filters_applied": filters or {},
+                        "fields_exported": fields or list(export_data[0].keys()) if export_data else []
+                    }
+                
+                elif format == "xlsx":
+                    # For Excel, we'd need to save to a temporary file or use BytesIO
+                    # For now, convert to CSV as fallback
+                    csv_content = df.write_csv()
+                    file_size = len(csv_content.encode('utf-8'))
+                    
+                    return {
+                        "export": {
+                            "content": csv_content,
+                            "file_name": file_name.replace('.xlsx', '.csv'),
+                            "file_size": file_size,
+                            "format": "csv",  # Fallback to CSV
+                            "total_records": len(export_data),
+                            "expires_at": (datetime.utcnow()).isoformat()
+                        },
+                        "filters_applied": filters or {},
+                        "fields_exported": fields or list(export_data[0].keys()) if export_data else []
+                    }
+                    
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error generating file: {str(e)}")
+        
+        else:
+            # Fallback: return JSON data
+            return {
+                "export": {
+                    "data": export_data,
+                    "file_name": file_name.replace(f'.{format}', '.json'),
+                    "file_size": len(str(export_data)),
+                    "format": "json",
+                    "total_records": len(export_data),
+                    "expires_at": (datetime.utcnow()).isoformat()
+                },
+                "filters_applied": filters or {},
+                "fields_exported": fields or list(export_data[0].keys()) if export_data else []
+            }
 
     async def import_leads(
         self,
@@ -367,6 +433,9 @@ class LeadService:
         validate_phones: bool = False
     ) -> Dict[str, Any]:
         """Import leads from CSV/Excel file"""
+        if pl is None:
+            raise HTTPException(status_code=500, detail="Polars not available for file processing")
+            
         if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
             raise HTTPException(status_code=400, detail="Only CSV and Excel files are supported")
         
@@ -379,9 +448,28 @@ class LeadService:
             
             # Parse file based on extension
             if file.filename.endswith('.csv'):
-                df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+                # Read CSV with polars
+                df = pl.read_csv(io.StringIO(content.decode('utf-8')))
             else:
-                df = pd.read_excel(io.BytesIO(content))
+                # For Excel files, we still need to use a compatible method
+                # Polars can read Excel but might need different approach
+                try:
+                    df = pl.read_excel(io.BytesIO(content))
+                except:
+                    # Fallback: read with openpyxl and convert to polars
+                    import openpyxl
+                    workbook = openpyxl.load_workbook(io.BytesIO(content))
+                    worksheet = workbook.active
+                    
+                    # Extract data to list of dictionaries
+                    data = []
+                    headers = [cell.value for cell in worksheet[1]]
+                    
+                    for row in worksheet.iter_rows(min_row=2, values_only=True):
+                        row_dict = {headers[i]: row[i] for i in range(len(headers)) if i < len(row)}
+                        data.append(row_dict)
+                    
+                    df = pl.DataFrame(data)
             
             # Validate mapping
             missing_columns = [col for col in mapping.values() if col not in df.columns]
@@ -398,15 +486,23 @@ class LeadService:
             skipped_duplicates = 0
             validation_errors = 0
             
-            for _, row in df.iterrows():
+            # Convert to list of dictionaries for processing
+            rows = df.to_dicts()
+            
+            for row_data in rows:
                 processed_rows += 1
                 
                 try:
                     # Map columns to lead fields
                     lead_data = {}
                     for lead_field, csv_column in mapping.items():
-                        if csv_column in row and pd.notna(row[csv_column]):
-                            lead_data[lead_field] = str(row[csv_column]).strip()
+                        if csv_column in row_data and row_data[csv_column] is not None:
+                            # Handle different data types
+                            value = row_data[csv_column]
+                            if isinstance(value, (int, float)):
+                                lead_data[lead_field] = str(value).strip()
+                            else:
+                                lead_data[lead_field] = str(value).strip()
                     
                     # Validate required fields
                     if not lead_data.get('company_name') or not lead_data.get('activity'):

@@ -116,6 +116,23 @@ class LeadExportResponse(BaseModel):
     export: Dict[str, Any]
     filters_applied: Dict[str, Any]
     fields_exported: List[str]
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "export": {
+                    "data": [{"company_name": "Empresa Solar", "email": "contacto@solar.com"}],  # For JSON format
+                    "content": "company_name,email\nEmpresa Solar,contacto@solar.com",  # For CSV format
+                    "file_name": "leads_export_20240115_103000.json",
+                    "file_size": 1024,
+                    "format": "json",
+                    "total_records": 150,
+                    "expires_at": "2024-01-15T10:30:00Z"
+                },
+                "filters_applied": {"min_quality_score": 3},
+                "fields_exported": ["company_name", "email", "phone"]
+            }
+        }
 
 
 # Import/Export Schemas

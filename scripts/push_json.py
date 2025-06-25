@@ -1,6 +1,6 @@
 """
 Script para importar múltiples archivos JSON de scraping
-Uso: python scripts/import_multiple_files.py data/
+Uso: uv run push_json data/
 """
 
 import json

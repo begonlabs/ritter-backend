@@ -1,10 +1,10 @@
 
 """
 Uso:
-    python make_admin.py <supabase_user_id>
+    uv run make_admin.py <supabase_user_id>
 
 Ejemplo:
-    python make_admin.py "550e8400-e29b-41d4-a716-446655440000"
+    uv run make_admin.py "550e8400-e29b-41d4-a716-446655440000"
 """
 
 import sys

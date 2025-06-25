@@ -84,7 +84,7 @@ class SearchService:
         """Create new search configuration"""
         # Check if name already exists for user
         existing = self.config_repo.get_by_field("name", config_data.name)
-        if existing and any(c.created_by == user_id for c in [existing] if isinstance(existing, list) else [existing]):
+        if existing and any(c.created_by == user_id for c in (existing if isinstance(existing, list) else [existing])):
             raise HTTPException(
                 status_code=400,
                 detail="A configuration with this name already exists"

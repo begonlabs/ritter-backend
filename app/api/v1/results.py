@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 
 from app.core.security import get_current_user

@@ -100,8 +100,7 @@ async def archive_notification(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error archiving notification: {str(e)}")=f"Error retrieving users: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Error archiving notification: {str(e)}")
 
 @router.get("/users/{user_id}", response_model=AdminUserDetailResponse)
 async def get_user_by_id(
@@ -745,4 +744,4 @@ async def mark_all_notifications_read(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

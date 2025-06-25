@@ -171,7 +171,7 @@ class SystemSettingsService:
         
         elif setting.value_type == "email":
             import re
-            email_pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+            email_pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
             if not re.match(email_pattern, value):
                 return False
         
